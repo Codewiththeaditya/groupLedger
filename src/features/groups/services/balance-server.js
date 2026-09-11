@@ -460,8 +460,8 @@ export async function getGroupsWithBalance() {
   }
 
   const groups = memberships
-    .map((membership) => membership.groups)
-    .filter(Boolean);
+  .map((membership) => membership.groups)
+  .filter(Boolean);
 
   if (groups.length === 0) {
     return [];

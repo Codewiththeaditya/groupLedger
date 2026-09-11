@@ -77,3 +77,35 @@ export async function findUserByEmail(email) {
 
   return profile;
 }
+
+
+export async function deleteGroup(groupId) {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) throw authError;
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const { data, error } = await supabase
+    .from("groups")
+    .delete()
+    .eq("id", groupId)
+    .select("id");
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      "Group was not deleted. You may not have permission."
+    );
+  }
+
+  return true;
+}

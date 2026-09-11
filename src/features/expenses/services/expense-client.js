@@ -156,6 +156,7 @@ export async function createExpense(groupId, values) {
         amount: values.amount,
         paid_by: values.paid_by,
         created_by: user.id,
+        split_type: values.split_type,
       })
       .select()
       .single();
@@ -210,6 +211,7 @@ export async function updateExpense(
       description: values.description,
       amount: values.amount,
       paid_by: values.paid_by,
+      split_type: values.split_type,
     })
     .eq("id", expenseId)
     .select()

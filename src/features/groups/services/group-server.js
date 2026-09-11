@@ -106,6 +106,7 @@ export async function getExpenseDetails(expenseId) {
       paid_by,
       created_by,
       created_at,
+      split_type,
       profiles:paid_by (
         id,
         full_name,

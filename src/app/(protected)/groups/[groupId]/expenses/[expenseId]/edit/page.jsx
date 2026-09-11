@@ -4,9 +4,16 @@ import {
 } from "@/features/groups/services/group-server";
 
 import ExpenseForm from "@/features/expenses/forms/expense-form";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function EditExpensePage({ params }) {
   const { groupId, expenseId } = await params;
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const [{ group, members }, expense] = await Promise.all([
     getGroupDetails(groupId),
@@ -26,6 +33,7 @@ export default async function EditExpensePage({ params }) {
       <ExpenseForm
         groupId={groupId}
         members={members}
+        currentUserId={user.id}
         expense={expense}
         mode="edit"
       />

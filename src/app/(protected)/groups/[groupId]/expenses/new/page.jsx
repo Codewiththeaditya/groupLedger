@@ -1,8 +1,15 @@
 import { getGroupDetails } from "@/features/groups/services/group-server";
 import ExpenseForm from "@/features/expenses/forms/expense-form";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function NewExpensePage({ params }) {
   const { groupId } = await params;
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { group, members } = await getGroupDetails(groupId);
 
@@ -16,7 +23,11 @@ export default async function NewExpensePage({ params }) {
         {group.name}
       </p>
 
-      <ExpenseForm groupId={groupId} members={members}/>
+      <ExpenseForm
+        groupId={groupId}
+        members={members}
+        currentUserId={user.id}
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 export default function ExpenseForm({
   groupId,
   members,
+  currentUserId,
   expense,
   mode = "create",
 }) {
@@ -22,7 +23,6 @@ export default function ExpenseForm({
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(expenseSchema),
@@ -32,44 +32,52 @@ export default function ExpenseForm({
           description: expense.description,
           amount: String(expense.amount),
           paid_by: expense.paid_by,
-          split_type: "equal",
+
+          // Preserve existing split type
+          split_type: expense.split_type || "equal",
+
+          // Preserve users involved in split
           split_between: expense.expense_splits.map(
             (split) => split.user_id
           ),
-          custom_amounts: {},
-          percentages: {},
+
+          // Preserve existing split amounts
+          custom_amounts: Object.fromEntries(
+            expense.expense_splits.map((split) => [
+              split.user_id,
+              String(split.amount),
+            ])
+          ),
+
+          // Calculate percentages from existing amounts
+          percentages: Object.fromEntries(
+            expense.expense_splits.map((split) => [
+              split.user_id,
+              String(
+                (
+                  (Number(split.amount) /
+                    Number(expense.amount)) *
+                  100
+                ).toFixed(2)
+              ),
+            ])
+          ),
         }
       : {
           description: "",
           amount: "",
-          paid_by: "",
+          paid_by: currentUserId,
+
           split_type: "equal",
-          split_between: [],
+
+          split_between: members.map(
+            (member) => member.profiles.id
+          ),
+
           custom_amounts: {},
           percentages: {},
         },
-  });
-
-  const splitType = watch("split_type");
-  const selectedMembers = watch("split_between") || [];
-  const amount = Number(watch("amount")) || 0;
-
-  const customAmounts = watch("custom_amounts") || {};
-  const percentages = watch("percentages") || {};
-
-  const customTotal = selectedMembers.reduce(
-    (total, userId) => {
-      return total + (Number(customAmounts[userId]) || 0);
-    },
-    0
-  );
-
-  const percentageTotal = selectedMembers.reduce(
-    (total, userId) => {
-      return total + (Number(percentages[userId]) || 0);
-    },
-    0
-  );
+  }); // <-- THIS WAS MISSING
 
   async function onSubmit(values) {
     try {
@@ -84,6 +92,8 @@ export default function ExpenseForm({
 
         router.push(`/groups/${groupId}`);
       }
+
+      router.refresh();
     } catch (error) {
       console.error(
         isEdit
@@ -92,6 +102,25 @@ export default function ExpenseForm({
         error
       );
     }
+  }
+
+  function goToSplitPage(type) {
+    return handleSubmit((values) => {
+      const params = new URLSearchParams({
+        type,
+        description: values.description,
+        amount: values.amount,
+        paidBy: values.paid_by,
+      });
+
+      const splitPath = isEdit
+        ? `/groups/${groupId}/expenses/${expense.id}/edit/split`
+        : `/groups/${groupId}/expenses/new/split`;
+
+      router.push(
+        `${splitPath}?${params.toString()}`
+      );
+    });
   }
 
   return (
@@ -108,7 +137,7 @@ export default function ExpenseForm({
         <input
           {...register("description")}
           type="text"
-          placeholder="Dinner"
+          placeholder="Dinner, groceries..."
           className="mt-1 h-10 w-full rounded-lg border p-2 outline-none"
           disabled={isSubmitting}
         />
@@ -123,17 +152,25 @@ export default function ExpenseForm({
       {/* Amount */}
       <div>
         <label className="text-sm font-semibold">
-          Amount
+          How much?
         </label>
 
-        <input
-          {...register("amount")}
-          type="number"
-          step="0.01"
-          placeholder="1200"
-          className="mt-1 h-10 w-full rounded-lg border p-2 outline-none"
-          disabled={isSubmitting}
-        />
+        <div className="flex items-center rounded-xl border px-4">
+          <span className="text-lg text-zinc-500">
+            ₹
+          </span>
+
+          <input
+            {...register("amount")}
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0"
+            inputMode="decimal"
+            className="w-full bg-transparent px-3 py-3 text-lg outline-none"
+            disabled={isSubmitting}
+          />
+        </div>
 
         {errors.amount && (
           <p className="mt-1 text-sm text-red-500">
@@ -144,25 +181,23 @@ export default function ExpenseForm({
 
       {/* Paid By */}
       <div>
-        <label className="text-sm font-semibold">
+        <label className="mb-2 block text-sm font-medium">
           Paid by
         </label>
 
         <select
           {...register("paid_by")}
-          className="mt-1 h-10 w-full rounded-lg border p-2 outline-none"
+          className="w-full rounded-xl border bg-transparent px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
           disabled={isSubmitting}
         >
-          <option value="">
-            Select member
-          </option>
-
           {members.map((member) => (
             <option
               key={member.profiles.id}
               value={member.profiles.id}
             >
-              {member.profiles.full_name}
+              {member.profiles.id === currentUserId
+                ? "You"
+                : member.profiles.full_name}
             </option>
           ))}
         </select>
@@ -174,211 +209,49 @@ export default function ExpenseForm({
         )}
       </div>
 
-      {/* Split Type */}
-      <div>
-        <label className="text-sm font-semibold">
-          Split type
-        </label>
+      {/* Split info */}
+      <p className="text-sm text-zinc-500">
+        {expense?.split_type === "custom"
+          ? "This expense currently uses a custom split."
+          : expense?.split_type === "percentage"
+          ? "This expense currently uses a percentage split."
+          : `Split equally between all ${members.length} ${
+              members.length === 1
+                ? "member"
+                : "members"
+            }`}
+      </p>
 
-        <div className="mt-3 flex flex-wrap gap-6">
-          {/* Equal */}
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              value="equal"
-              {...register("split_type")}
-              disabled={isSubmitting}
-            />
+      {/* Other Split Options */}
+      <div className="flex gap-4">
+        <button
+          type="button"
+          onClick={goToSplitPage("percentage")}
+          disabled={isSubmitting}
+          className="flex-1 rounded-xl border p-4 text-center transition hover:bg-zinc-50 disabled:opacity-50"
+        >
+          <span className="font-medium">
+            Percentage
+          </span>
+        </button>
 
-            <span>Equal</span>
-          </label>
-
-          {/* Custom */}
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              value="custom"
-              {...register("split_type")}
-              disabled={isSubmitting}
-            />
-
-            <span>Custom</span>
-          </label>
-
-          {/* Percentage */}
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              value="percentage"
-              {...register("split_type")}
-              disabled={isSubmitting}
-            />
-
-            <span>Percentage</span>
-          </label>
-        </div>
-
-        {errors.split_type && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.split_type.message}
-          </p>
-        )}
-      </div>
-
-      {/* Split Between */}
-      <div>
-        <label className="text-sm font-semibold">
-          Split between
-        </label>
-
-        <div className="mt-3 space-y-3">
-          {members.map((member) => {
-            const userId = member.profiles.id;
-
-            return (
-              <div key={userId}>
-                {/* Member checkbox */}
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    value={userId}
-                    {...register("split_between")}
-                    disabled={isSubmitting}
-                  />
-
-                  <span>
-                    {member.profiles.full_name}
-                  </span>
-                </label>
-
-                {/* Custom Amount */}
-                {splitType === "custom" &&
-                  selectedMembers.includes(userId) && (
-                    <div className="ml-7 mt-2">
-                      <input
-                        {...register(
-                          `custom_amounts.${userId}`
-                        )}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="Amount"
-                        className="h-9 w-32 rounded-lg border p-2 outline-none"
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                  )}
-
-                {/* Percentage */}
-                {splitType === "percentage" &&
-                  selectedMembers.includes(userId) && (
-                    <div className="ml-7 mt-2 flex items-center gap-2">
-                      <input
-                        {...register(
-                          `percentages.${userId}`
-                        )}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        placeholder="Percentage"
-                        className="h-9 w-32 rounded-lg border p-2 outline-none"
-                        disabled={isSubmitting}
-                      />
-
-                      <span className="text-sm text-zinc-500">
-                        %
-                      </span>
-                    </div>
-                  )}
-              </div>
-            );
-          })}
-        </div>
-
-        {errors.split_between && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.split_between.message}
-          </p>
-        )}
-
-        {/* Custom Total */}
-        {splitType === "custom" && (
-          <div className="mt-4 rounded-lg border p-3 text-sm">
-            <div className="flex justify-between">
-              <span>Total expense</span>
-
-              <span className="font-semibold">
-                ₹{amount.toFixed(2)}
-              </span>
-            </div>
-
-            <div className="mt-1 flex justify-between">
-              <span>Split total</span>
-
-              <span className="font-semibold">
-                ₹{customTotal.toFixed(2)}
-              </span>
-            </div>
-
-            <div className="mt-2">
-              {Math.abs(customTotal - amount) < 0.001 ? (
-                <p className="font-medium text-green-600">
-                  Amounts match ✓
-                </p>
-              ) : (
-                <p className="font-medium text-red-500">
-                  Amounts must add up to ₹
-                  {amount.toFixed(2)}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {errors.custom_amounts && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.custom_amounts.message}
-          </p>
-        )}
-
-        {/* Percentage Total */}
-        {splitType === "percentage" && (
-          <div className="mt-4 rounded-lg border p-3 text-sm">
-            <div className="flex justify-between">
-              <span>Total percentage</span>
-
-              <span className="font-semibold">
-                {percentageTotal.toFixed(2)}%
-              </span>
-            </div>
-
-            <div className="mt-2">
-              {Math.abs(percentageTotal - 100) < 0.001 ? (
-                <p className="font-medium text-green-600">
-                  Percentages match ✓
-                </p>
-              ) : (
-                <p className="font-medium text-red-500">
-                  Percentages must add up to 100%
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {errors.percentages && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.percentages.message}
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={goToSplitPage("custom")}
+          disabled={isSubmitting}
+          className="flex-1 rounded-xl border p-4 text-center transition hover:bg-zinc-50 disabled:opacity-50"
+        >
+          <span className="font-medium">
+            Custom amount
+          </span>
+        </button>
       </div>
 
       {/* Submit */}
       <button
         type="submit"
         disabled={isSubmitting}
-        className="h-10 w-full rounded-lg bg-blue-500 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-xl bg-blue-500 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting
           ? isEdit

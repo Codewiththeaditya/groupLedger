@@ -1,22 +1,21 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-export default function ExpensesSection({ groupId, expenses }) {
+export default function ExpensesSection({
+  groupId,
+  expenses,
+}) {
   return (
     <section className="mt-8">
-      <div className="flex items-center justify-between">
+      
+      {/* Section title */}
+      <div>
         <h2 className="text-lg font-semibold">
           Expenses
         </h2>
-
-        <Link
-          href={`/groups/${groupId}/expenses/new`}
-          className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white"
-        >
-          <Plus size={16} />
-          Add Expense
-        </Link>
       </div>
+
+      {/* Expenses */}
 
       {expenses.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed p-8 text-center">
@@ -53,6 +52,16 @@ export default function ExpensesSection({ groupId, expenses }) {
           ))}
         </div>
       )}
+
+      {/* Floating Add Expense Button */}
+      <Link
+        href={`/groups/${groupId}/expenses/new`}
+        className="fixed bottom-24 right-5 z-50 flex items-center gap-2 rounded-full bg-blue-500 px-5 py-4 font-medium text-white shadow-lg"
+      >
+        <Plus size={22} />
+        <span>Add Expense</span>
+      </Link>
+
     </section>
   );
 }

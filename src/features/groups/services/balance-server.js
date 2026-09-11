@@ -423,3 +423,171 @@ export async function getDashboardDebts() {
     })
     .filter((person) => person.amount > 0.01);
 }
+
+export async function getGroupsWithBalance() {
+  const supabase = await createClient();
+
+  /* ---------------- AUTH ---------------- */
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) throw authError;
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  /* ---------------- FETCH GROUPS ---------------- */
+
+  const { data: memberships, error: groupsError } =
+    await supabase
+      .from("group_members")
+      .select(`
+        group_id,
+        groups (
+          id,
+          name,
+          created_by
+        )
+      `)
+      .eq("user_id", user.id);
+
+  if (groupsError) {
+    throw groupsError;
+  }
+
+  const groups = memberships
+    .map((membership) => membership.groups)
+    .filter(Boolean);
+
+  if (groups.length === 0) {
+    return [];
+  }
+
+  const groupIds = groups.map((group) => group.id);
+
+  /* ---------------- FETCH EXPENSES ---------------- */
+
+  const { data: expenses, error: expensesError } =
+    await supabase
+      .from("expenses")
+      .select(`
+        group_id,
+        amount,
+        paid_by,
+        expense_splits (
+          user_id,
+          amount
+        )
+      `)
+      .in("group_id", groupIds);
+
+  if (expensesError) {
+    throw expensesError;
+  }
+
+  /* ---------------- FETCH SETTLEMENTS ---------------- */
+
+  const { data: settlements, error: settlementsError } =
+    await supabase
+      .from("settlements")
+      .select(`
+        group_id,
+        from_user,
+        to_user,
+        amount
+      `)
+      .in("group_id", groupIds);
+
+  if (settlementsError) {
+    throw settlementsError;
+  }
+
+  /* ---------------- INITIALIZE BALANCES ---------------- */
+
+  const groupBalances = {};
+
+  for (const group of groups) {
+    groupBalances[group.id] = 0;
+  }
+
+  /* ---------------- EXPENSE ACCOUNTING ---------------- */
+
+  for (const expense of expenses || []) {
+    const groupId = expense.group_id;
+
+    /*
+      If current user paid:
+      + full expense amount
+    */
+
+    if (expense.paid_by === user.id) {
+      groupBalances[groupId] += Number(expense.amount);
+    }
+
+    /*
+      If current user has a split:
+      - their split amount
+    */
+
+    for (const split of expense.expense_splits || []) {
+      if (split.user_id === user.id) {
+        groupBalances[groupId] -= Number(split.amount);
+      }
+    }
+  }
+
+  /* ---------------- SETTLEMENT ACCOUNTING ---------------- */
+
+  for (const settlement of settlements || []) {
+    const groupId = settlement.group_id;
+    const amount = Number(settlement.amount);
+
+    /*
+      Current user paid someone:
+      debt decreases
+      balance increases
+    */
+
+    if (settlement.from_user === user.id) {
+      groupBalances[groupId] += amount;
+    }
+
+    /*
+      Current user received money:
+      credit decreases
+      balance decreases
+    */
+
+    if (settlement.to_user === user.id) {
+      groupBalances[groupId] -= amount;
+    }
+  }
+
+  /* ---------------- RETURN GROUP STATUS ---------------- */
+
+  return groups.map((group) => {
+    const balance = Number(
+      groupBalances[group.id].toFixed(2)
+    );
+
+    let status = "settled";
+
+    if (balance > 0.01) {
+      status = "owed";
+    }
+
+    if (balance < -0.01) {
+      status = "owe";
+    }
+
+    return {
+      ...group,
+      balance: Math.abs(balance),
+      status,
+    };
+  });
+}

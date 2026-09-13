@@ -77,7 +77,7 @@ export default function ExpenseForm({
           custom_amounts: {},
           percentages: {},
         },
-  }); // <-- THIS WAS MISSING
+  });
 
   async function onSubmit(values) {
     try {
@@ -105,7 +105,7 @@ export default function ExpenseForm({
   }
 
   function goToSplitPage(type) {
-    return handleSubmit((values) => {
+    handleSubmit((values) => {
       const params = new URLSearchParams({
         type,
         description: values.description,
@@ -120,7 +120,26 @@ export default function ExpenseForm({
       router.push(
         `${splitPath}?${params.toString()}`
       );
-    });
+    })();
+  }
+
+  function handleSplitChange(type) {
+    handleSubmit((values) => {
+      const params = new URLSearchParams({
+        type,
+        description: values.description,
+        amount: values.amount,
+        paidBy: values.paid_by,
+      });
+
+      const splitPath = isEdit
+        ? `/groups/${groupId}/expenses/${expense.id}/edit/split`
+        : `/groups/${groupId}/expenses/new/split`;
+
+      router.push(
+        `${splitPath}?${params.toString()}`
+      );
+    })();
   }
 
   return (
@@ -179,15 +198,16 @@ export default function ExpenseForm({
         )}
       </div>
 
-      {/* Paid By */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">
+      
+{/* Paid By + Split */}
+      <div className="flex items-center gap-2 rounded-xl border p-3 text-sm">
+        <span className="whitespace-nowrap text-zinc-500">
           Paid by
-        </label>
+        </span>
 
         <select
           {...register("paid_by")}
-          className="w-full rounded-xl border bg-transparent px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+          className="min-w-0 flex-1 bg-transparent font-medium outline-none"
           disabled={isSubmitting}
         >
           {members.map((member) => (
@@ -202,49 +222,30 @@ export default function ExpenseForm({
           ))}
         </select>
 
-        {errors.paid_by && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.paid_by.message}
-          </p>
-        )}
-      </div>
+        <span className="text-zinc-400">
+          and
+        </span>
 
-      {/* Split info */}
-      <p className="text-sm text-zinc-500">
-        {expense?.split_type === "custom"
-          ? "This expense currently uses a custom split."
-          : expense?.split_type === "percentage"
-          ? "This expense currently uses a percentage split."
-          : `Split equally between all ${members.length} ${
-              members.length === 1
-                ? "member"
-                : "members"
-            }`}
-      </p>
-
-      {/* Other Split Options */}
-      <div className="flex gap-4">
-        <button
-          type="button"
-          onClick={goToSplitPage("percentage")}
+        <select
+          value={expense?.split_type || "equal"}
+          onChange={(e) =>
+            goToSplitPage(e.target.value)()
+          }
+          className="min-w-0 flex-1 bg-transparent font-medium outline-none"
           disabled={isSubmitting}
-          className="flex-1 rounded-xl border p-4 text-center transition hover:bg-zinc-50 disabled:opacity-50"
         >
-          <span className="font-medium">
-            Percentage
-          </span>
-        </button>
+          <option value="equal">
+            split equally
+          </option>
 
-        <button
-          type="button"
-          onClick={goToSplitPage("custom")}
-          disabled={isSubmitting}
-          className="flex-1 rounded-xl border p-4 text-center transition hover:bg-zinc-50 disabled:opacity-50"
-        >
-          <span className="font-medium">
-            Custom amount
-          </span>
-        </button>
+          <option value="percentage">
+            split by percentage
+          </option>
+
+          <option value="custom">
+            split by amount
+          </option>
+        </select>
       </div>
 
       {/* Submit */}

@@ -19,8 +19,10 @@ export default function EditSplitForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const totalAmount = Number(amount) || 0;
+
   // =============================
-  // EXISTING SPLIT VALUES
+  // EXISTING CUSTOM AMOUNTS
   // =============================
 
   const existingCustomAmounts = Object.fromEntries(
@@ -29,6 +31,10 @@ export default function EditSplitForm({
       String(split.amount),
     ])
   );
+
+  // =============================
+  // EXISTING PERCENTAGES
+  // =============================
 
   const existingPercentages = Object.fromEntries(
     expense.expense_splits.map((split) => [
@@ -43,11 +49,21 @@ export default function EditSplitForm({
     ])
   );
 
-  const [splitValues, setSplitValues] = useState(
-    splitType === "percentage"
-      ? existingPercentages
-      : existingCustomAmounts
-  );
+  // =============================
+  // SPLIT VALUES
+  // =============================
+
+  const [splitValues, setSplitValues] = useState(() => {
+    if (splitType === "percentage") {
+      return existingPercentages;
+    }
+
+    if (splitType === "custom") {
+      return existingCustomAmounts;
+    }
+
+    return {};
+  });
 
   function handleChange(userId, value) {
     setSplitValues((prev) => ({
@@ -55,6 +71,32 @@ export default function EditSplitForm({
       [userId]: value,
     }));
   }
+
+  // =============================
+  // TOTAL
+  // =============================
+
+  const total = Object.values(splitValues).reduce(
+    (sum, value) => {
+      return sum + Number(value || 0);
+    },
+    0
+  );
+
+  // =============================
+  // VALIDATION
+  // =============================
+
+  const isValid =
+    splitType === "equal" ||
+    (splitType === "percentage" &&
+      Math.abs(total - 100) < 0.001) ||
+    (splitType === "custom" &&
+      Math.abs(total - totalAmount) < 0.01);
+
+  // =============================
+  // SAVE
+  // =============================
 
   async function handleSave() {
     try {
@@ -83,10 +125,7 @@ export default function EditSplitForm({
             : {},
       };
 
-      await updateExpense(
-        expense.id,
-        values
-      );
+      await updateExpense(expense.id, values);
 
       router.push(
         `/groups/${groupId}/expenses/${expense.id}`
@@ -104,13 +143,6 @@ export default function EditSplitForm({
       setLoading(false);
     }
   }
-
-  const total = Object.values(splitValues).reduce(
-    (sum, value) => {
-      return sum + Number(value || 0);
-    },
-    0
-  );
 
   return (
     <div className="mt-6">
@@ -130,94 +162,114 @@ export default function EditSplitForm({
         </p>
 
         <p className="text-xl font-semibold">
-          ₹{Number(amount).toFixed(2)}
+          ₹{totalAmount.toFixed(2)}
         </p>
       </div>
 
-      {/* Split members */}
+      {/* EQUAL SPLIT */}
 
-      <div className="space-y-3">
-        {members.map((member) => {
-          const userId = member.profiles.id;
+      {splitType === "equal" && (
+        <div className="rounded-xl border p-4">
+          <p className="font-medium">
+            Split equally
+          </p>
 
-          return (
-            <div
-              key={userId}
-              className="flex items-center justify-between rounded-xl border p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 font-semibold text-white">
-                  {member.profiles.full_name
-                    ?.charAt(0)
-                    .toUpperCase()}
+          <p className="mt-1 text-sm text-zinc-500">
+            Each member will pay ₹
+            {members.length > 0
+              ? (
+                  totalAmount /
+                  members.length
+                ).toFixed(2)
+              : "0.00"}
+          </p>
+        </div>
+      )}
+
+      {/* PERCENTAGE / CUSTOM SPLIT */}
+
+      {splitType !== "equal" && (
+        <>
+          {/* Split members */}
+
+          <div className="space-y-3">
+            {members.map((member) => {
+              const userId = member.profiles.id;
+
+              return (
+                <div
+                  key={userId}
+                  className="flex items-center justify-between rounded-xl border p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 font-semibold text-white">
+                      {member.profiles.full_name
+                        ?.charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <p className="font-medium">
+                      {member.profiles.full_name}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitValues[userId] || ""}
+                      onChange={(e) =>
+                        handleChange(
+                          userId,
+                          e.target.value
+                        )
+                      }
+                      className="w-24 rounded-lg border px-3 py-2 text-right outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+
+                    <span className="text-sm text-zinc-500">
+                      {splitType === "percentage"
+                        ? "%"
+                        : "₹"}
+                    </span>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
 
-                <p className="font-medium">
-                  {member.profiles.full_name}
-                </p>
-              </div>
+          {/* Total */}
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={splitValues[userId] || ""}
-                  onChange={(e) =>
-                    handleChange(
-                      userId,
-                      e.target.value
-                    )
-                  }
-                  className="w-24 rounded-lg border px-3 py-2 text-right outline-none focus:ring-2 focus:ring-blue-500"
-                />
+          <div className="mt-4 flex justify-between text-sm">
+            <span className="text-zinc-500">
+              {splitType === "percentage"
+                ? "Total percentage"
+                : "Total split"}
+            </span>
 
-                <span className="text-sm text-zinc-500">
-                  {splitType === "percentage"
-                    ? "%"
-                    : "₹"}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Total */}
-
-      <div className="mt-4 flex justify-between text-sm">
-        <span className="text-zinc-500">
-          {splitType === "percentage"
-            ? "Total percentage"
-            : "Total split"}
-        </span>
-
-        <span
-          className={`font-semibold ${
-            splitType === "percentage"
-              ? Math.abs(total - 100) < 0.001
-                ? "text-green-500"
-                : "text-red-500"
-              : Math.abs(
-                  total - Number(amount)
-                ) < 0.01
-              ? "text-green-500"
-              : "text-red-500"
-          }`}
-        >
-          {splitType === "percentage"
-            ? `${total.toFixed(2)}%`
-            : `₹${total.toFixed(2)}`}
-        </span>
-      </div>
+            <span
+              className={`font-semibold ${
+                isValid
+                  ? "text-green-500"
+                  : "text-red-500"
+              }`}
+            >
+              {splitType === "percentage"
+                ? `${total.toFixed(2)}%`
+                : `₹${total.toFixed(2)}`}
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Save */}
 
       <button
         type="button"
         onClick={handleSave}
-        disabled={loading}
-        className="mt-6 w-full rounded-xl bg-blue-500 py-3 font-semibold text-white disabled:opacity-50"
+        disabled={loading || !isValid}
+        className="mt-6 w-full rounded-xl bg-blue-500 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading
           ? "Saving..."

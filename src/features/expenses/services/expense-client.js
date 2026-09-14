@@ -134,7 +134,6 @@ function buildSplits(expenseId, values) {
 // ========================================
 
 export async function createExpense(groupId, values) {
-  // Get current user
   const {
     data: { user },
     error: authError,
@@ -146,7 +145,9 @@ export async function createExpense(groupId, values) {
     throw new Error("User not found.");
   }
 
-  // Create expense
+  // Validate split BEFORE creating expense
+  buildSplits("validation", values);
+
   const { data: expense, error: expenseError } =
     await supabase
       .from("expenses")
@@ -163,13 +164,11 @@ export async function createExpense(groupId, values) {
 
   if (expenseError) throw expenseError;
 
-  // Build splits
   const splits = buildSplits(
     expense.id,
     values
   );
 
-  // Insert splits
   const { error: splitError } =
     await supabase
       .from("expense_splits")

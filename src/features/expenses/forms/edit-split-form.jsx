@@ -169,20 +169,90 @@ export default function EditSplitForm({
       {/* EQUAL SPLIT */}
 
       {splitType === "equal" && (
-        <div className="rounded-xl border p-4">
-          <p className="font-medium">
-            Split equally
-          </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="font-medium">
+              Split equally between
+            </p>
 
-          <p className="mt-1 text-sm text-zinc-500">
-            Each member will pay ₹
-            {members.length > 0
-              ? (
-                  totalAmount /
-                  members.length
-                ).toFixed(2)
-              : "0.00"}
-          </p>
+            <p className="text-sm text-zinc-500">
+              {selectedMembers.length} selected
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {members.map((member) => {
+              const userId = member.profiles.id;
+
+              const isSelected =
+                selectedMembers.includes(userId);
+
+              return (
+                <button
+                  key={userId}
+                  type="button"
+                  onClick={() => {
+                    setSelectedMembers((prev) => {
+                      if (prev.includes(userId)) {
+                        return prev.filter(
+                          (id) => id !== userId
+                        );
+                      }
+
+                      return [...prev, userId];
+                    });
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl border p-4 transition ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 font-semibold text-white">
+                      {member.profiles.full_name
+                        ?.charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <p className="font-medium">
+                      {member.profiles.full_name}
+                    </p>
+                  </div>
+
+                  <div
+                    className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-500"
+                        : "border-zinc-300"
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="text-xs text-white">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="rounded-xl border p-4">
+            <p className="text-sm text-zinc-500">
+              Each selected member pays
+            </p>
+
+            <p className="mt-1 text-xl font-semibold">
+              ₹
+              {selectedMembers.length > 0
+                ? (
+                    totalAmount /
+                    selectedMembers.length
+                  ).toFixed(2)
+                : "0.00"}
+            </p>
+          </div>
         </div>
       )}
 

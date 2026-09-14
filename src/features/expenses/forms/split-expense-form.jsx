@@ -14,65 +14,87 @@ export default function SplitExpenseForm({
 }) {
   const router = useRouter();
 
-  const [splitType, setSplitType] =
-    useState(type);
+  const [splitType, setSplitType] = useState(type);
 
-  const [percentages, setPercentages] =
-    useState(() => {
-      const initial = {};
+  // All members selected initially
+  const [selectedMembers, setSelectedMembers] = useState(
+    members.map((member) => member.profiles.id)
+  );
 
-      members.forEach((member) => {
-        initial[member.profiles.id] =
-          splitType === "percentage"
-            ? ""
-            : 0;
-      });
+  const [percentages, setPercentages] = useState(() => {
+    const initial = {};
 
-      return initial;
+    members.forEach((member) => {
+      initial[member.profiles.id] = "";
     });
 
-  const [customAmounts, setCustomAmounts] =
-    useState(() => {
-      const initial = {};
+    return initial;
+  });
 
-      members.forEach((member) => {
-        initial[member.profiles.id] =
-          "";
-      });
+  const [customAmounts, setCustomAmounts] = useState(() => {
+    const initial = {};
 
-      return initial;
+    members.forEach((member) => {
+      initial[member.profiles.id] = "";
     });
 
-  const [loading, setLoading] =
-    useState(false);
+    return initial;
+  });
 
-  const [error, setError] =
-    useState("");
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState("");
 
   const totalAmount = Number(amount) || 0;
 
-  const percentageTotal = Object.values(
-    percentages
-  ).reduce(
-    (total, value) =>
-      total + Number(value || 0),
+  function toggleMember(userId) {
+    setSelectedMembers((prev) => {
+      if (prev.includes(userId)) {
+        return prev.filter((id) => id !== userId);
+      }
+
+      return [...prev, userId];
+    });
+  }
+
+  // Only selected members
+  const activeMembers = members.filter((member) =>
+    selectedMembers.includes(member.profiles.id)
+  );
+
+  const percentageTotal = activeMembers.reduce(
+    (total, member) =>
+      total +
+      Number(percentages[member.profiles.id] || 0),
     0
   );
 
-  const customTotal = Object.values(
-    customAmounts
-  ).reduce(
-    (total, value) =>
-      total + Number(value || 0),
+  const customTotal = activeMembers.reduce(
+    (total, member) =>
+      total +
+      Number(customAmounts[member.profiles.id] || 0),
     0
   );
 
   const isSplitValid =
-    splitType === "equal" ||
-    (splitType === "percentage" &&
+    selectedMembers.length > 0 &&
+    (splitType === "equal" ||
+      (splitType === "percentage" &&
         Math.abs(percentageTotal - 100) < 0.001) ||
-    (splitType === "custom" &&
-        Math.abs(customTotal - totalAmount) < 0.01);
+      (splitType === "custom" &&
+        Math.abs(customTotal - totalAmount) < 0.01));
+
+  function toggleMember(userId) {
+    setSelectedMembers((previous) => {
+      if (previous.includes(userId)) {
+        return previous.filter((id) => id !== userId);
+      }
+
+      return [...previous, userId];
+    });
+
+    setError("");
+  }
 
   function changeSplitType(newType) {
     setSplitType(newType);
@@ -91,18 +113,22 @@ export default function SplitExpenseForm({
 
         split_type: splitType,
 
-        split_between: members.map(
-          (member) => member.profiles.id
-        ),
+        split_between: selectedMembers,
 
-        percentages,
-        custom_amounts: customAmounts,
+        percentages:
+          splitType === "percentage"
+            ? percentages
+            : {},
+
+        custom_amounts:
+          splitType === "custom"
+            ? customAmounts
+            : {},
       };
 
       await createExpense(groupId, values);
 
       router.push(`/groups/${groupId}`);
-
       router.refresh();
     } catch (error) {
       console.error(error);
@@ -124,9 +150,7 @@ export default function SplitExpenseForm({
       <div className="grid grid-cols-3 gap-2 rounded-xl border p-1">
         <button
           type="button"
-          onClick={() =>
-            changeSplitType("equal")
-          }
+          onClick={() => changeSplitType("equal")}
           className={`rounded-lg py-2 text-sm font-medium ${
             splitType === "equal"
               ? "bg-blue-500 text-white"
@@ -152,9 +176,7 @@ export default function SplitExpenseForm({
 
         <button
           type="button"
-          onClick={() =>
-            changeSplitType("custom")
-          }
+          onClick={() => changeSplitType("custom")}
           className={`rounded-lg py-2 text-sm font-medium ${
             splitType === "custom"
               ? "bg-blue-500 text-white"
@@ -177,6 +199,57 @@ export default function SplitExpenseForm({
         </p>
       </div>
 
+      {/* MEMBER SELECTION */}
+
+      <div>
+        <div className="mb-3">
+          <p className="font-medium">
+            Split between
+          </p>
+
+          <p className="text-sm text-zinc-500">
+            Select members included in this expense
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {members.map((member) => {
+            const userId = member.profiles.id;
+
+            const isSelected =
+              selectedMembers.includes(userId);
+
+            return (
+              <label
+                key={userId}
+                className="flex cursor-pointer items-center justify-between rounded-xl border p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-medium text-blue-600">
+                    {member.profiles.full_name
+                      ?.charAt(0)
+                      .toUpperCase()}
+                  </div>
+
+                  <p className="font-medium">
+                    {member.profiles.full_name}
+                  </p>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() =>
+                    toggleMember(userId)
+                  }
+                  className="h-5 w-5"
+                />
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
       {/* EQUAL SPLIT */}
 
       {splitType === "equal" && (
@@ -186,13 +259,12 @@ export default function SplitExpenseForm({
           </p>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Each member will pay ₹
-            {members.length > 0
-              ? (
+            {selectedMembers.length === 0
+              ? "Select at least one member"
+              : `₹${(
                   totalAmount /
-                  members.length
-                ).toFixed(2)
-              : "0.00"}
+                  selectedMembers.length
+                ).toFixed(2)} per person`}
           </p>
         </div>
       )}
@@ -208,21 +280,19 @@ export default function SplitExpenseForm({
 
             <p
               className={`text-sm ${
-                Math.abs(
-                  percentageTotal - 100
-                ) < 0.001
+                Math.abs(percentageTotal - 100) <
+                0.001
                   ? "text-green-500"
                   : "text-red-500"
               }`}
             >
-              {percentageTotal}% / 100%
+              {percentageTotal.toFixed(2)}% / 100%
             </p>
           </div>
 
           <div className="space-y-3">
-            {members.map((member) => {
-              const userId =
-                member.profiles.id;
+            {activeMembers.map((member) => {
+              const userId = member.profiles.id;
 
               return (
                 <div
@@ -245,8 +315,7 @@ export default function SplitExpenseForm({
                       onChange={(e) =>
                         setPercentages({
                           ...percentages,
-                          [userId]:
-                            e.target.value,
+                          [userId]: e.target.value,
                         })
                       }
                       className="w-20 rounded-lg border px-2 py-2 text-right outline-none"
@@ -287,9 +356,8 @@ export default function SplitExpenseForm({
           </div>
 
           <div className="space-y-3">
-            {members.map((member) => {
-              const userId =
-                member.profiles.id;
+            {activeMembers.map((member) => {
+              const userId = member.profiles.id;
 
               return (
                 <div
@@ -301,9 +369,7 @@ export default function SplitExpenseForm({
                   </p>
 
                   <div className="flex items-center gap-2">
-                    <span>
-                      ₹
-                    </span>
+                    <span>₹</span>
 
                     <input
                       type="number"
@@ -315,8 +381,7 @@ export default function SplitExpenseForm({
                       onChange={(e) =>
                         setCustomAmounts({
                           ...customAmounts,
-                          [userId]:
-                            e.target.value,
+                          [userId]: e.target.value,
                         })
                       }
                       className="w-24 rounded-lg border px-2 py-2 text-right outline-none"
@@ -344,9 +409,11 @@ export default function SplitExpenseForm({
         onClick={handleSave}
         disabled={loading || !isSplitValid}
         className="w-full rounded-xl bg-blue-500 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-        {loading ? "Saving..." : "Save Expense"}
-        </button>
+      >
+        {loading
+          ? "Saving..."
+          : "Save Expense"}
+      </button>
     </div>
   );
 }
